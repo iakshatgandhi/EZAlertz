@@ -1,0 +1,18 @@
+{
+  "name": "stock-alert-app",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter backend dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:market-data": "pnpm --filter backend dev:market-data",
+    "verify": "pnpm --filter backend verify",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter backend test",
+    "db:migrate": "pnpm --filter backend db:migrate",
+    "db:generate": "pnpm --filter backend db:generate",
+    "sync-instruments": "pnpm --filter backend sync-instruments"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
