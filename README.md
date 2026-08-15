@@ -62,7 +62,7 @@ pnpm dev:frontend
 
 ## Project structure
 
-See [project-structure-plan.md](../project-structure-plan.md) for the full layout.
+See [project-structure-plan.md](./project-structure-plan.md) for the full layout.
 
 ## Phases completed
 
