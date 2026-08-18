@@ -21,6 +21,6 @@ export function handleSse(req: Request, res: Response): void {
 
   req.on("close", () => {
     clearInterval(heartbeat);
-    eventBus.off("CONNECTION_STATUS", sendEvent);
+    eventBus.offAny(sendEvent);
   });
 }

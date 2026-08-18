@@ -8,6 +8,54 @@ export type MarketDataConnectionStatus =
   | "reconnecting"
   | "disconnected";
 
+export type MarketSessionState =
+  | "OPEN"
+  | "CLOSED"
+  | "PRE_OPEN"
+  | "POST_CLOSE"
+  | "HOLIDAY";
+
+export interface MarketDaySummary {
+  date: string;
+  dateLabel: string;
+  isTradingDay: boolean;
+  holidayReason: string | null;
+  holidayType: string | null;
+  sessionStart: string | null;
+  sessionEnd: string | null;
+  sessionStartLabel: string | null;
+  sessionEndLabel: string | null;
+}
+
+export interface MarketTodaySummary extends MarketDaySummary {
+  marketStatus: string;
+  statusLabel: string;
+  statusDescription: string;
+  state: MarketSessionState;
+  countdownLabel: string;
+  countdownTarget: string | null;
+  secondsRemaining: number | null;
+  sessionProgressPercent: number | null;
+}
+
+export interface MarketNextSession {
+  dateLabel: string;
+  opensAtLabel: string | null;
+  opensAt: string | null;
+  secondsUntilOpen: number | null;
+  label: string;
+}
+
+export interface MarketCalendarStatus {
+  exchange: string;
+  timezone: string;
+  now: string;
+  today: MarketTodaySummary;
+  tomorrow: MarketDaySummary;
+  nextSession: MarketNextSession | null;
+  alertsActive: boolean;
+}
+
 export interface NormalizedTick {
   instrumentKey: string;
   symbol: string;

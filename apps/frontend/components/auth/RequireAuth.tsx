@@ -3,6 +3,16 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { Spinner } from "@/components/ui/Spinner";
+
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <Spinner size="lg" />
+      <p className="text-sm text-muted">Loading...</p>
+    </div>
+  );
+}
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -15,11 +25,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }, [loading, user, router]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!user) {
@@ -40,11 +46,7 @@ export function RedirectIfAuth({ children }: { children: ReactNode }) {
   }, [loading, user, router]);
 
   if (loading || user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return <>{children}</>;

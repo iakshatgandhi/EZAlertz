@@ -21,6 +21,10 @@ export class EventBus {
     this.handlers.get(type)?.delete(handler);
   }
 
+  offAny(handler: EventHandler): void {
+    this.wildcardHandlers.delete(handler);
+  }
+
   emit<T>(type: SSEEventType, data: T): void {
     const event: SSEEvent<T> = {
       type,

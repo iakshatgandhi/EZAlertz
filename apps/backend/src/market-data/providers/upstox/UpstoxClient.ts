@@ -34,13 +34,22 @@ export class UpstoxClientWrapper {
     onTicks: (ticks: ReturnType<typeof mapUpstoxMessage>) => void,
   ): void {
     streamer.on("message", (message: unknown) => {
-      let payload: unknown = message;
+      let raw: unknown = message;
 
-      if (typeof message === "string") {
+      if (Buffer.isBuffer(message)) {
+        raw = message.toString("utf-8");
+      }
+
+      let payload: unknown = raw;
+
+      if (typeof raw === "string") {
+        if (raw === "null" || raw.trim() === "") {
+          return;
+        }
         try {
-          payload = JSON.parse(message);
+          payload = JSON.parse(raw);
         } catch {
-          logger.debug({ message }, "Non-JSON Upstox message received");
+          logger.debug({ message: raw.slice(0, 200) }, "Non-JSON Upstox message received");
           return;
         }
       }
@@ -48,6 +57,14 @@ export class UpstoxClientWrapper {
       const ticks = mapUpstoxMessage(payload);
       if (ticks.length > 0) {
         onTicks(ticks);
+        return;
+      }
+
+      if (payload && typeof payload === "object") {
+        const record = payload as { feeds?: unknown; type?: unknown };
+        if (record.feeds) {
+          logger.debug({ type: record.type }, "Upstox feed received but no LTP mapped");
+        }
       }
     });
 

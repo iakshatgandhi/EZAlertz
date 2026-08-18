@@ -11,28 +11,33 @@ export function StockSearchBar({ value, onChange }: StockSearchBarProps) {
       <label htmlFor="stock-search" className="sr-only">
         Search stocks
       </label>
-      <svg
-        className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        aria-hidden
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
+      <div className="pointer-events-none absolute left-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-elevated">
+        <svg
+          className="h-4 w-4 text-faint"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+      </div>
       <input
         id="stock-search"
         type="search"
-        placeholder="Search stocks... type at least 2 letters"
+        placeholder="Search by symbol or company name..."
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-slate-700 bg-slate-950/80 py-3.5 pl-12 pr-4 text-base outline-none ring-brand-500 placeholder:text-slate-500 focus:ring-2"
+        className="input-field !py-3.5 !pl-14 !text-base"
       />
+      {value.length > 0 && value.length < 2 && (
+        <p className="mt-2 text-xs text-faint">Type at least 2 characters to search</p>
+      )}
     </div>
   );
 }

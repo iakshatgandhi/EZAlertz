@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import type { Alert, CreateAlertRequest } from "@stock-alert/shared-types";
 import type { EngineAlert } from "../alert-engine/types.js";
 import { getDb } from "../db/postgres/client.js";
@@ -23,6 +23,32 @@ export interface PriceStateUpdate {
 
 export class AlertsRepository {
   private readonly db = getDb(process.env.DATABASE_URL!);
+
+  async findTriggeredHistory(userId: string, since: Date): Promise<Alert[]> {
+    const rows = await this.db
+      .select({ alert: alerts, instrument: instruments })
+      .from(alerts)
+      .innerJoin(instruments, eq(alerts.instrumentId, instruments.id))
+      .where(
+        and(
+          eq(alerts.userId, userId),
+          eq(alerts.status, "TRIGGERED"),
+          gte(alerts.triggeredAt, since),
+        ),
+      )
+      .orderBy(desc(alerts.triggeredAt));
+
+    return rows.map(({ alert, instrument }) => mapAlertRow(alert, instrument));
+  }
+
+  async deleteTriggeredOlderThan(before: Date): Promise<number> {
+    const result = await this.db
+      .delete(alerts)
+      .where(and(eq(alerts.status, "TRIGGERED"), lt(alerts.triggeredAt, before)))
+      .returning({ id: alerts.id });
+
+    return result.length;
+  }
 
   async findByUserId(userId: string, status?: string): Promise<Alert[]> {
     const conditions = [eq(alerts.userId, userId)];

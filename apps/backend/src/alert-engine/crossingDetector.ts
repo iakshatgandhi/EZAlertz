@@ -7,16 +7,30 @@ export interface CrossingInput {
   currentPrice: number;
 }
 
+export function isConditionMet(input: Omit<CrossingInput, "previousPrice">): boolean {
+  const { conditionType, targetPrice, currentPrice } = input;
+
+  if (conditionType === "BELOW") {
+    return currentPrice <= targetPrice;
+  }
+
+  return currentPrice >= targetPrice;
+}
+
 export function detectCrossing(input: CrossingInput): boolean {
   const { conditionType, targetPrice, previousPrice, currentPrice } = input;
 
+  const metNow = isConditionMet({ conditionType, targetPrice, currentPrice });
+
   if (previousPrice === null) {
-    return false;
+    return metNow;
   }
 
-  if (conditionType === "BELOW") {
-    return previousPrice >= targetPrice && currentPrice < targetPrice;
-  }
+  const metBefore = isConditionMet({
+    conditionType,
+    targetPrice,
+    currentPrice: previousPrice,
+  });
 
-  return previousPrice <= targetPrice && currentPrice > targetPrice;
+  return !metBefore && metNow;
 }

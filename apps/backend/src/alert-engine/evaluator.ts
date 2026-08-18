@@ -28,17 +28,27 @@ export class AlertEngine {
     }
   }
 
+  async evaluatePrice(alertId: string, ltp: number): Promise<void> {
+    const alert = await this.alertCache.getById(alertId);
+    if (!alert || alert.status !== "ACTIVE") {
+      return;
+    }
+
+    await this.evaluateAlert(alert, {
+      instrumentKey: alert.instrumentKey,
+      symbol: alert.symbol,
+      exchange: "NSE",
+      ltp,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   private async evaluateAlert(
     alert: Awaited<ReturnType<AlertCache["getActiveByInstrumentKey"]>>[number],
     tick: NormalizedTick,
   ): Promise<void> {
     const currentPrice = tick.ltp;
     const previousPrice = alert.previousPrice;
-
-    if (previousPrice === null) {
-      await this.persistPriceState(alert, currentPrice, currentPrice, alert.status);
-      return;
-    }
 
     const crossed = detectCrossing({
       conditionType: alert.conditionType,
@@ -50,7 +60,7 @@ export class AlertEngine {
     if (crossed) {
       const acquired = await this.alertCache.tryAcquireTriggerLock(
         alert.id,
-        previousPrice,
+        previousPrice ?? currentPrice,
         currentPrice,
       );
 
@@ -60,45 +70,56 @@ export class AlertEngine {
         return;
       }
 
-      const nextStatus = nextAlertStatus(alert.status, alert.alertMode, true);
-      const triggeredAt = new Date();
+      await this.fireTrigger(alert, currentPrice);
+      return;
+    }
 
-      await this.persistPriceState(alert, currentPrice, currentPrice, nextStatus, triggeredAt);
+    if (previousPrice === null) {
+      await this.persistPriceState(alert, currentPrice, currentPrice, alert.status);
+      return;
+    }
 
-      const message = `${alert.symbol} crossed ${alert.conditionType === "BELOW" ? "below" : "above"} ₹${alert.targetPrice}. Current price: ₹${currentPrice}.`;
+    await this.persistPriceState(alert, currentPrice, currentPrice, alert.status);
+  }
 
-      logger.info(
-        {
-          alertId: alert.id,
-          symbol: alert.symbol,
-          conditionType: alert.conditionType,
-          targetPrice: alert.targetPrice,
-          currentPrice,
-          alertMode: alert.alertMode,
-          nextStatus,
-        },
-        "Alert triggered",
-      );
+  private async fireTrigger(
+    alert: Awaited<ReturnType<AlertCache["getActiveByInstrumentKey"]>>[number],
+    currentPrice: number,
+  ): Promise<void> {
+    const nextStatus = nextAlertStatus(alert.status, alert.alertMode, true);
+    const triggeredAt = new Date();
 
-      await this.notifications.notify({
-        alertId: alert.id,
-        userId: alert.userId,
-        message,
-      });
+    await this.persistPriceState(alert, currentPrice, currentPrice, nextStatus, triggeredAt);
 
-      eventBus.emit("ALERT_TRIGGERED", {
+    const message = `${alert.symbol} crossed ${alert.conditionType === "BELOW" ? "below" : "above"} ₹${alert.targetPrice}. Current price: ₹${currentPrice}.`;
+
+    logger.info(
+      {
         alertId: alert.id,
         symbol: alert.symbol,
         conditionType: alert.conditionType,
         targetPrice: alert.targetPrice,
         currentPrice,
-        status: nextStatus,
-      });
+        alertMode: alert.alertMode,
+        nextStatus,
+      },
+      "Alert triggered",
+    );
 
-      return;
-    }
+    await this.notifications.notify({
+      alertId: alert.id,
+      userId: alert.userId,
+      message,
+    });
 
-    await this.persistPriceState(alert, currentPrice, currentPrice, alert.status);
+    eventBus.emit("ALERT_TRIGGERED", {
+      alertId: alert.id,
+      symbol: alert.symbol,
+      conditionType: alert.conditionType,
+      targetPrice: alert.targetPrice,
+      currentPrice,
+      status: nextStatus,
+    });
   }
 
   private async persistPriceState(

@@ -1,13 +1,17 @@
 import type { CreateAlertRequest, Alert } from "@stock-alert/shared-types";
+import type { AlertEngine } from "../alert-engine/evaluator.js";
 import type { EngineAlert } from "../alert-engine/types.js";
 import type { AlertCache } from "../db/redis/alertCache.js";
 import type { SubscriptionManager } from "../market-data/subscriptionManager.js";
+import { UpstoxQuoteClient } from "../instruments/upstox/UpstoxQuoteClient.js";
 import { InstrumentsRepository } from "../instruments/instruments.repository.js";
 import { NotFoundError, ValidationError } from "../shared/errors.js";
+import { logger } from "../shared/logger.js";
 import { eventBus } from "../realtime/eventBus.js";
 import { AlertsRepository } from "./alerts.repository.js";
 import { toEngineAlert } from "./alerts.mapper.js";
 import type { UpdateAlertInput } from "./alerts.validation.js";
+import { getAlertHistoryCutoff } from "../config/constants.js";
 import { getDb } from "../db/postgres/client.js";
 import { alerts, instruments } from "../db/postgres/schema/index.js";
 import { eq } from "drizzle-orm";
@@ -17,11 +21,21 @@ export class AlertsService {
     private readonly repository: AlertsRepository,
     private readonly alertCache: AlertCache,
     private readonly subscriptionManager: SubscriptionManager,
+    private readonly alertEngine?: Pick<AlertEngine, "evaluatePrice">,
+    private readonly quoteClient?: UpstoxQuoteClient,
     private readonly instrumentsRepository = new InstrumentsRepository(),
   ) {}
 
   async listAlerts(userId: string, status?: string): Promise<Alert[]> {
     return this.repository.findByUserId(userId, status);
+  }
+
+  async listAlertHistory(userId: string): Promise<Alert[]> {
+    return this.repository.findTriggeredHistory(userId, getAlertHistoryCutoff());
+  }
+
+  async purgeExpiredTriggeredAlerts(): Promise<number> {
+    return this.repository.deleteTriggeredOlderThan(getAlertHistoryCutoff());
   }
 
   async createAlert(userId: string, input: CreateAlertRequest): Promise<Alert> {
@@ -50,8 +64,30 @@ export class AlertsService {
       await this.subscriptionManager.add([instrument.instrumentKey]);
     }
 
-    eventBus.emit("ALERT_CREATED", { alert });
-    return alert;
+    await this.evaluateNewAlert(alert.id, instrument.instrumentKey);
+
+    const latest = await this.repository.findById(alert.id);
+    const created = latest ?? alert;
+
+    eventBus.emit("ALERT_CREATED", { alert: created });
+    return created;
+  }
+
+  private async evaluateNewAlert(alertId: string, instrumentKey: string): Promise<void> {
+    if (!this.alertEngine || !this.quoteClient) {
+      return;
+    }
+
+    try {
+      const ltp = await this.quoteClient.getLtp(instrumentKey);
+      if (ltp === null) {
+        return;
+      }
+
+      await this.alertEngine.evaluatePrice(alertId, ltp);
+    } catch (error) {
+      logger.warn({ error, alertId, instrumentKey }, "Immediate alert evaluation failed");
+    }
   }
 
   async updateAlert(

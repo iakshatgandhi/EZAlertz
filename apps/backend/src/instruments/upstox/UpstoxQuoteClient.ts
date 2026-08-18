@@ -31,6 +31,25 @@ function extractLtp(
   return Number(ltp);
 }
 
+function parseLtpsFromPayload(payload: UpstoxLtpResponse): Map<string, number> {
+  const result = new Map<string, number>();
+  const data = payload.data;
+  if (!data) {
+    return result;
+  }
+
+  for (const [key, quote] of Object.entries(data)) {
+    const ltp = quote?.last_price ?? quote?.ltp;
+    if (ltp === undefined || ltp === null || Number.isNaN(Number(ltp))) {
+      continue;
+    }
+    result.set(key, Number(ltp));
+    result.set(decodeURIComponent(key), Number(ltp));
+  }
+
+  return result;
+}
+
 export class UpstoxQuoteClient {
   constructor(private readonly accessToken: string) {}
 
@@ -64,5 +83,50 @@ export class UpstoxQuoteClient {
     }
 
     return ltp;
+  }
+
+  async getLtps(instrumentKeys: string[]): Promise<Map<string, number>> {
+    const uniqueKeys = [...new Set(instrumentKeys)];
+    if (uniqueKeys.length === 0) {
+      return new Map();
+    }
+
+    const url = new URL(UPSTOX_LTP_URL);
+    for (const instrumentKey of uniqueKeys) {
+      url.searchParams.append("instrument_key", instrumentKey);
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      assertUpstoxAuthorized(response.status, "LTP quote");
+      logger.error(
+        { status: response.status, count: uniqueKeys.length, body: body.slice(0, 200) },
+        "Upstox batch LTP fetch failed",
+      );
+      throw new Error(`Upstox batch LTP fetch failed: HTTP ${response.status}`);
+    }
+
+    const payload = (await response.json()) as UpstoxLtpResponse;
+    const parsed = parseLtpsFromPayload(payload);
+    const result = new Map<string, number>();
+
+    for (const instrumentKey of uniqueKeys) {
+      const ltp =
+        parsed.get(instrumentKey) ??
+        parsed.get(decodeURIComponent(instrumentKey)) ??
+        null;
+      if (ltp !== null) {
+        result.set(instrumentKey, ltp);
+      }
+    }
+
+    return result;
   }
 }

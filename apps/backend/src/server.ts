@@ -1,3 +1,4 @@
+import type { NormalizedTick } from "@stock-alert/shared-types";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
@@ -16,14 +17,20 @@ import { AlertIndex } from "./db/redis/alertIndex.js";
 import { getRedis } from "./db/redis/client.js";
 import { getDb } from "./db/postgres/client.js";
 import { createInstrumentsRouter } from "./instruments/instruments.controller.js";
+import { createMarketCalendarRouter } from "./market-calendar/marketCalendar.controller.js";
+import { MarketCalendarService } from "./market-calendar/marketCalendar.service.js";
+import { UpstoxMarketCalendarClient } from "./market-calendar/upstox/UpstoxMarketCalendarClient.js";
+import { UpstoxQuoteClient } from "./instruments/upstox/UpstoxQuoteClient.js";
 import { validateUpstoxAccessToken } from "./instruments/upstox/upstoxAuth.js";
 import { MarketDataReconnectManager } from "./market-data/marketDataReconnectManager.js";
+import { LtpPollingService } from "./market-data/ltpPollingService.js";
 import { UpstoxProvider } from "./market-data/providers/upstox/UpstoxProvider.js";
 import { SubscriptionManager } from "./market-data/subscriptionManager.js";
 import { createNotificationSystem } from "./notifications/index.js";
 import { eventBus } from "./realtime/eventBus.js";
 import { handleSse } from "./realtime/sse.js";
 import { recoverState } from "./startup/recoverState.js";
+import { startAlertHistoryCleanup } from "./startup/alertHistoryCleanup.js";
 import { seedDatabase } from "./startup/seed.js";
 import { AppError } from "./shared/errors.js";
 import { logger } from "./shared/logger.js";
@@ -42,11 +49,7 @@ const requireAuth = createSessionMiddleware(sessionStore);
 
 const marketDataProvider = new UpstoxProvider(env.UPSTOX_ACCESS_TOKEN);
 const subscriptionManager = new SubscriptionManager(marketDataProvider);
-const alertsService = new AlertsService(
-  alertsRepository,
-  alertCache,
-  subscriptionManager,
-);
+const upstoxQuoteClient = new UpstoxQuoteClient(env.UPSTOX_ACCESS_TOKEN);
 
 const notificationSystem = createNotificationSystem(
   env.REDIS_URL,
@@ -58,6 +61,17 @@ const alertEngine = new AlertEngine(
   alertCache,
   alertsRepository,
   notificationSystem.service,
+);
+
+const alertsService = new AlertsService(
+  alertsRepository,
+  alertCache,
+  subscriptionManager,
+  alertEngine,
+  upstoxQuoteClient,
+);
+const marketCalendarService = new MarketCalendarService(
+  new UpstoxMarketCalendarClient(env.UPSTOX_ACCESS_TOKEN),
 );
 
 const marketDataReconnect = new MarketDataReconnectManager(marketDataProvider, {
@@ -81,14 +95,14 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-marketDataProvider.onPriceUpdate((tick) => {
+function handlePriceTick(tick: NormalizedTick): void {
   latestTick = {
     instrumentKey: tick.instrumentKey,
     ltp: tick.ltp,
     timestamp: tick.timestamp,
   };
 
-  logger.info(
+  logger.debug(
     {
       instrumentKey: tick.instrumentKey,
       symbol: tick.symbol,
@@ -107,7 +121,15 @@ marketDataProvider.onPriceUpdate((tick) => {
   });
 
   void alertEngine.onTick(tick);
-});
+}
+
+marketDataProvider.onPriceUpdate(handlePriceTick);
+
+const ltpPollingService = new LtpPollingService(
+  upstoxQuoteClient,
+  () => subscriptionManager.getActiveKeys(),
+  handlePriceTick,
+);
 
 marketDataProvider.onConnectionStatus((status) => {
   eventBus.emit("CONNECTION_STATUS", { marketData: status });
@@ -134,6 +156,7 @@ app.get("/api/status", (_req, res) => {
 app.get("/api/events", handleSse);
 app.use("/api/auth", createAuthRouter(authService, sessionStore, env));
 app.use("/api/alerts", requireAuth, createAlertsRouter(alertsService));
+app.use("/api/market", requireAuth, createMarketCalendarRouter(marketCalendarService));
 app.use("/api/stocks", requireAuth, createInstrumentsRouter(env.UPSTOX_ACCESS_TOKEN, subscriptionManager));
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -169,6 +192,8 @@ async function bootstrap(): Promise<void> {
     subscriptionManager,
   });
 
+  startAlertHistoryCleanup(alertsService);
+
   const upstoxTokenValid = await validateUpstoxAccessToken(env.UPSTOX_ACCESS_TOKEN);
   if (!upstoxTokenValid) {
     logger.error(
@@ -196,6 +221,9 @@ async function bootstrap(): Promise<void> {
         "Market data WebSocket failed to connect — reconnect manager will keep trying",
       );
     }
+
+    ltpPollingService.start();
+    logger.info("LTP polling started for subscribed instruments");
   }
 
   app.listen(env.PORT, () => {
@@ -209,11 +237,13 @@ bootstrap().catch((error) => {
 });
 
 process.on("SIGINT", () => {
+  ltpPollingService.stop();
   marketDataReconnect.stop();
   void notificationSystem.close().finally(() => process.exit(0));
 });
 
 process.on("SIGTERM", () => {
+  ltpPollingService.stop();
   marketDataReconnect.stop();
   void notificationSystem.close().finally(() => process.exit(0));
 });

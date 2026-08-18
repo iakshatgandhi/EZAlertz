@@ -12,3 +12,12 @@ export const UPSTOX_INSTRUMENTS_URL =
 export const INSTRUMENT_SYNC_MIN_COUNT = 500;
 
 export const EQUITY_SEGMENTS = new Set(["NSE_EQ", "BSE_EQ"]);
+
+export const ALERT_HISTORY_RETENTION_HOURS = 24;
+export const ALERT_HISTORY_RETENTION_MS =
+  ALERT_HISTORY_RETENTION_HOURS * 60 * 60 * 1000;
+export const ALERT_HISTORY_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+
+export function getAlertHistoryCutoff(now = new Date()): Date {
+  return new Date(now.getTime() - ALERT_HISTORY_RETENTION_MS);
+}

@@ -6,6 +6,17 @@ import { ValidationError } from "../shared/errors.js";
 export function createAlertsRouter(alertsService: AlertsService): Router {
   const router = Router();
 
+  router.get("/history", async (req: Request, res: Response) => {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const history = await alertsService.listAlertHistory(userId);
+    res.json({ data: history });
+  });
+
   router.get("/", async (req: Request, res: Response) => {
     const userId = req.userId;
     if (!userId) {

@@ -20,9 +20,26 @@ export function useAlerts() {
     }
   }, []);
 
+  const updateLivePrice = useCallback((instrumentKey: string, ltp: number) => {
+    setAlerts((current) => {
+      let changed = false;
+      const next = current.map((alert) => {
+        if (alert.instrument?.instrumentKey !== instrumentKey) {
+          return alert;
+        }
+        if (alert.lastPrice === ltp) {
+          return alert;
+        }
+        changed = true;
+        return { ...alert, lastPrice: ltp };
+      });
+      return changed ? next : current;
+    });
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  return { alerts, loading, refresh };
+  return { alerts, loading, refresh, updateLivePrice };
 }

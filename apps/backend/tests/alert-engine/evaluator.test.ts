@@ -78,6 +78,16 @@ function createMocks() {
 }
 
 describe("AlertEngine", () => {
+  it("triggers on first tick when condition is already met", async () => {
+    const { engine, alerts, notifications } = createMocks();
+    alerts.push(makeAlert({ previousPrice: null, lastPrice: null }));
+
+    await engine.onTick(makeTick(1449.9));
+
+    expect(notifications).toHaveLength(1);
+    expect(alerts[0]?.status).toBe("TRIGGERED");
+  });
+
   it("sets baseline price on first tick without triggering", async () => {
     const { engine, alerts, notifications } = createMocks();
     alerts.push(makeAlert({ previousPrice: null, lastPrice: null }));

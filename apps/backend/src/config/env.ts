@@ -5,7 +5,7 @@ const envSchema = z.object({
   // Optional for Phase 1 — needed later for OAuth token refresh
   UPSTOX_CLIENT_ID: z.string().optional().default(""),
   UPSTOX_CLIENT_SECRET: z.string().optional().default(""),
-  UPSTOX_ACCESS_TOKEN: z.string().min(1, "Required for live market data"),
+  UPSTOX_ACCESS_TOKEN: z.string().trim().min(1, "Required for live market data"),
   DATABASE_URL: z
     .string()
     .url()

@@ -73,43 +73,61 @@ export function AlertForm({
   }
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-5 backdrop-blur">
-      <h2 className="mb-1 text-lg font-semibold">Create alert</h2>
-      <p className="mb-4 text-sm text-slate-400">
-        {instrument
-          ? `Set a price target for ${instrument.companyName}`
-          : "Select a stock from search results first"}
-      </p>
+    <div className="glass-card animate-slide-up p-6">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="section-label mb-1">New alert</p>
+          <h2 className="text-lg font-semibold text-foreground">Set price target</h2>
+          <p className="mt-1 text-sm text-muted">
+            {instrument
+              ? `Configure alert for ${instrument.symbol}`
+              : "Select a stock from search first"}
+          </p>
+        </div>
+        {instrument && (
+          <div className="shrink-0 rounded-xl border border-border bg-elevated px-3 py-2 text-right">
+            <p className="font-mono text-sm font-semibold text-foreground">{instrument.symbol}</p>
+            <p className="text-[10px] uppercase tracking-wider text-faint">{instrument.exchange}</p>
+          </div>
+        )}
+      </div>
 
       {instrument && (
-        <div className="mb-4 rounded-lg bg-slate-950/80 px-3 py-2 text-sm">
-          <span className="font-medium text-slate-200">{instrument.symbol}</span>
-          <span className="text-slate-500"> · {instrument.exchange}</span>
-          {ltpLoading && (
-            <span className="ml-2 text-slate-400">Fetching LTP...</span>
-          )}
-          {!ltpLoading && currentPrice !== null && currentPrice !== undefined && (
-            <span className="ml-2 text-brand-400">
-              LTP ₹{currentPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-            </span>
-          )}
-          {!ltpLoading && ltpError && (
-            <span className="ml-2 text-amber-400">{ltpError}</span>
-          )}
+        <div className="mb-5 rounded-xl border border-border bg-gradient-to-r from-elevated to-transparent px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">
+            {instrument.companyName}
+          </p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-2">
+            {ltpLoading ? (
+              <span className="text-sm text-muted">Fetching live price...</span>
+            ) : currentPrice !== null && currentPrice !== undefined ? (
+              <>
+                <span className="text-2xl font-bold tabular-nums text-foreground">
+                  ₹{currentPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+                <span className="badge bg-brand-500/15 text-brand-600 dark:text-brand-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand-400 animate-pulse-soft" />
+                  Live
+                </span>
+              </>
+            ) : ltpError ? (
+              <span className="text-sm text-amber-600 dark:text-amber-400">{ltpError}</span>
+            ) : (
+              <span className="text-sm text-muted">Price unavailable</span>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <fieldset disabled={!instrument}>
-          <legend className="mb-2 text-sm font-medium text-slate-400">Alert me when</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <legend className="mb-2.5 text-sm font-medium text-muted">Alert when price goes</legend>
+          <div className="segmented-control">
             {(["ABOVE", "BELOW"] as const).map((value) => (
               <label
                 key={value}
-                className={`flex cursor-pointer items-center justify-center rounded-lg border px-3 py-2.5 text-sm transition ${
-                  condition === value
-                    ? "border-brand-500 bg-brand-500/10 text-brand-400"
-                    : "border-slate-700 text-slate-400 hover:border-slate-600"
+                className={`segmented-option ${
+                  condition === value ? "segmented-option-active" : "hover:text-foreground"
                 }`}
               >
                 <input
@@ -120,32 +138,34 @@ export function AlertForm({
                   onChange={() => setCondition(value)}
                   className="sr-only"
                 />
-                Price goes {value === "ABOVE" ? "above" : "below"}
+                {value === "ABOVE" ? "↑ Above" : "↓ Below"}
               </label>
             ))}
           </div>
         </fieldset>
 
         <div>
-          <label htmlFor="target-price" className="mb-1 block text-sm font-medium text-slate-400">
+          <label htmlFor="target-price" className="mb-2 block text-sm font-medium text-muted">
             Target price (₹)
-            {ltpPrefilled ? " — prefilled with LTP, adjust for your alert" : ""}
+            {ltpPrefilled && (
+              <span className="ml-1 font-normal text-faint">· prefilled from LTP</span>
+            )}
           </label>
           <input
             id="target-price"
             type="number"
             step="0.05"
-            placeholder={ltpLoading ? "Fetching LTP..." : "Enter target price"}
+            placeholder={ltpLoading ? "Fetching LTP..." : "0.00"}
             value={targetPrice}
             onChange={(e) => setTargetPrice(e.target.value)}
             disabled={!instrument || ltpLoading}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 outline-none ring-brand-500 focus:ring-2 disabled:opacity-50"
+            className="input-field !py-3 font-mono text-lg tabular-nums"
           />
         </div>
 
         <fieldset disabled={!instrument}>
-          <legend className="mb-2 text-sm font-medium text-slate-400">Alert mode</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <legend className="mb-2.5 text-sm font-medium text-muted">After trigger</legend>
+          <div className="segmented-control">
             {(
               [
                 ["ONE_TIME", "One-time"],
@@ -154,10 +174,8 @@ export function AlertForm({
             ).map(([value, label]) => (
               <label
                 key={value}
-                className={`flex cursor-pointer items-center justify-center rounded-lg border px-3 py-2.5 text-sm transition ${
-                  mode === value
-                    ? "border-brand-500 bg-brand-500/10 text-brand-400"
-                    : "border-slate-700 text-slate-400 hover:border-slate-600"
+                className={`segmented-option ${
+                  mode === value ? "segmented-option-active" : "hover:text-foreground"
                 }`}
               >
                 <input
@@ -174,16 +192,24 @@ export function AlertForm({
           </div>
         </fieldset>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        {success && <p className="text-sm text-brand-400">Alert created successfully</p>}
+        {error && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="rounded-xl border border-brand-500/20 bg-brand-500/10 px-4 py-3 text-sm text-brand-700 dark:text-brand-300">
+            Alert created — monitoring started
+          </div>
+        )}
 
         <button
           type="button"
           onClick={() => void handleSubmit()}
           disabled={!instrument || submitting}
-          className="w-full rounded-lg bg-brand-600 py-2.5 font-medium text-white transition hover:bg-brand-500 disabled:opacity-50"
+          className="btn-primary w-full !py-3"
         >
-          {submitting ? "Setting alert..." : "Set alert"}
+          {submitting ? "Creating alert..." : "Create alert"}
         </button>
       </div>
     </div>
